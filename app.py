@@ -48,7 +48,7 @@ def change_is_turn_on():
         if count == 5:
             is_turn_on = False
         previous_pas_ppm = gas_ppm
-        time.sleep(1)
+        time.sleep(2)
 
 # Khởi chạy luồng cho việc lưu ppm liên tục
 threading.Thread(target=store_ppm_data, daemon=True).start()
@@ -104,7 +104,7 @@ def get_gas_history():
 
 @app.route('/get_ppm')
 def get_ppm():
-    return jsonify({'ppm': gas_ppm, 'is_turn_on': is_turn_on})
+    return jsonify({'ppm': gas_ppm})
 @app.route('/get_status')
 def get_status():
     return jsonify({'is_turn_on': is_turn_on})
