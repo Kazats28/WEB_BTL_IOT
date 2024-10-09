@@ -19,13 +19,13 @@ client = MongoClient(connection_string)
 db = client.gas_monitoring  # Tên database
 settings_collection = db.settings  # Tên collection
 ppm_collection = db.gas_data
+previous_pas_ppm = 0
 gas_ppm = 0
+count = 0
 is_turn_on = False
-on_change = False
 # Gửi dữ liệu gas_ppm lên MongoDB mỗi 10 giây
 def store_ppm_data():
     global gas_ppm
-    global on_change
     global is_turn_on
     while True:
         if gas_ppm != 0 and is_turn_on:  # Chỉ lưu khi gas_ppm có giá trị hợp lệ
@@ -34,15 +34,21 @@ def store_ppm_data():
                 "timestamp": datetime.now()
             })
         time.sleep(10)  # Lưu dữ liệu mỗi 10 giây
-        on_change = False
 
 def change_is_turn_on():
     global is_turn_on
-    global on_change
+    global previous_pas_ppm
+    global count
+    global gas_ppm
     while True:
-        if on_change is False:
+        if gas_ppm == previous_pas_ppm:
+            count += 1
+        else:
+            count = 0
+        if count == 5:
             is_turn_on = False
-        time.sleep(5)
+        previous_pas_ppm = gas_ppm
+        time.sleep(1)
 
 # Khởi chạy luồng cho việc lưu ppm liên tục
 threading.Thread(target=store_ppm_data, daemon=True).start()
@@ -58,9 +64,7 @@ def get_settings():
 def receive_data():
     global gas_ppm
     global is_turn_on
-    global on_change
     is_turn_on = True
-    on_change = True
     data = request.get_json()  # Lấy dữ liệu JSON từ request
     if data and 'ppm' in data:
         gas_ppm = float(data['ppm'])  # Chuyển đổi giá trị ppm từ chuỗi thành số thực
