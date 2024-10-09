@@ -3,7 +3,7 @@ from pymongo import MongoClient
 import threading
 import time
 from datetime import datetime
-
+import pytz
 app = Flask(__name__)
 
 # Kết nối đến MongoDB
@@ -27,11 +27,16 @@ is_turn_on = False
 def store_ppm_data():
     global gas_ppm
     global is_turn_on
+    # Thiết lập múi giờ cho Việt Nam
+    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
     while True:
         if gas_ppm != 0 and is_turn_on:  # Chỉ lưu khi gas_ppm có giá trị hợp lệ
+            # Lấy thời gian hiện tại theo múi giờ Việt Nam
+            vn_time = datetime.now(vn_tz)
             ppm_collection.insert_one({
                 "ppm": gas_ppm,
-                "timestamp": datetime.now()
+                "timestamp": vn_time
             })
         time.sleep(10)  # Lưu dữ liệu mỗi 10 giây
 
