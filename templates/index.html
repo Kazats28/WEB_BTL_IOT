@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gas Monitoring</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/gaugeJS@latest/dist/gauge.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js for the line chart -->
+</head>
+<body>
+    <!-- Sidebar with tabs -->
+    <div class="sidebar">
+        <div class="status-circle" id="statusCircle"></div>
+        <button onclick="showTab('tab1')" class="selected">Thao tác</button>
+        <button onclick="showTab('tab2')">Biểu đồ</button>
+    </div>
+
+    <!-- Main content for tabs -->
+    <div class="content">
+    <!-- Tab 1 Content -->
+        <div id="tab1" class="tab active">
+            <!-- Gauge Chart for Gas PPM -->
+            <div class="widget">
+                <h2 style="margin-top: 100px;">Nồng độ khí Gas</h2>
+                <canvas id="gaugeChart"></canvas>
+                <div id="currentPPM" style="text-align: center; font-size: 20px; font-weight: bold; margin-top: 10px;">0 PPM</div>
+            </div>
+
+            <!-- Sliders for thresholds -->
+            <div class="widget">
+                <h3>Ngưỡng cảnh báo mức thấp</h3>
+                <input type="range" id="lowThreshold" min="0" max="1000" value="{{ low_threshold }}" oninput="updateLowThreshold(this.value)">
+                <span id="lowThresholdValue">{{ low_threshold }}</span>
+            </div>
+
+            <div class="widget">
+                <h3>Ngưỡng cảnh báo mức cao</h3>
+                <input type="range" id="highThreshold" min="{{ low_threshold }}" max="2000" value="{{ high_threshold }}" oninput="updateHighThreshold(this.value)">
+                <span id="highThresholdValue">{{ high_threshold }}</span>
+            </div>
+
+            <!-- Switches for manual alert control -->
+            <div class="widgets-container">
+                <div class="widget">
+                    <h3>Bật cảnh báo mức thấp</h3>
+                    <label class="switch">
+                        <input type="checkbox" id="lowAlertSwitch" {{ 'checked' if low_alert else '' }} onchange="updateLowAlert(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="widget">
+                    <h3>Bật cảnh báo mức cao</h3>
+                    <label class="switch">
+                        <input type="checkbox" id="highAlertSwitch" {{ 'checked' if high_alert else '' }} onchange="updateHighAlert(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab2" class="tab">
+            <h1>Biểu đồ nồng độ khí Gas</h1>
+            <canvas id="lineChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Function to switch between tabs
+        function showTab(tabId) {
+            // Ẩn tất cả các tab
+            var tabs = document.querySelectorAll('.tab');
+            tabs.forEach(function (tab) {
+                tab.classList.remove('active');
+            });
+
+            // Hiển thị tab được chọn
+            document.getElementById(tabId).classList.add('active');
+
+            // Thay đổi màu của nút
+            var buttons = document.querySelectorAll('.sidebar button');
+            buttons.forEach(function (button) {
+                button.classList.remove('selected'); // Loại bỏ lớp 'selected' khỏi tất cả các nút
+            });
+
+            // Thêm lớp 'selected' cho nút được chọn
+            var selectedButton = Array.from(buttons).find(button => button.textContent === (tabId === 'tab1' ? 'Hành động' : 'Biểu đồ'));
+            if (selectedButton) {
+                selectedButton.classList.add('selected'); // Thêm lớp cho nút được chọn
+            }
+        }
+
+        function updateLowThreshold(value) {
+            document.getElementById('lowThresholdValue').textContent = value;
+            document.getElementById('highThreshold').min = value;
+            updateThresholds();
+        }
+
+        function updateHighThreshold(value) {
+            document.getElementById('highThresholdValue').textContent = value;
+            updateThresholds();
+        }
+
+        function updateThresholds() {
+            const lowThreshold = document.getElementById('lowThreshold').value;
+            const highThreshold = document.getElementById('highThreshold').value;
+
+            fetch('/update_thresholds', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({low_threshold: lowThreshold, high_threshold: highThreshold}),
+            });
+        }
+
+        let currentLowAlert = {{ 'true' if low_alert else 'false' }};
+        let currentHighAlert = {{ 'true' if high_alert else 'false' }};
+
+        function updateLowAlert(checked) {
+            currentLowAlert = checked;
+            if (checked) {
+                document.getElementById('highAlertSwitch').checked = false;  // Tắt high alert khi low alert bật
+                currentHighAlert = false;  // Cập nhật biến high alert
+            }
+            updateAlerts();  // Call the function to send both alerts' statuses
+        }
+
+        function updateHighAlert(checked) {
+            currentHighAlert = checked;
+            if (checked) {
+                document.getElementById('lowAlertSwitch').checked = false;  // Tắt low alert khi high alert bật
+                currentLowAlert = false;  // Cập nhật biến low alert
+            }
+            updateAlerts();  // Call the function to send both alerts' statuses
+        }
+
+        function updateAlerts() {
+            fetch('/update_alerts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    low_alert: currentLowAlert,
+                    high_alert: currentHighAlert
+                }),
+            }).then(response => {
+                if (!response.ok) {
+                    console.error("Error updating alerts");
+                }
+            });
+        }
+
+        // Khởi tạo biểu đồ gauge bằng Gauge.js
+        var opts = {
+            angle: 0, // Phạm vi của cung gauge (cung nhỏ để bao phủ một nửa)
+            lineWidth: 0.4, // Độ dày của gauge
+            radiusScale: 1, // Bán kính tương đối
+            pointer: {
+                length: 0.6, // Tương đối với bán kính gauge
+                strokeWidth: 0.035, // Độ dày của kim
+                color: '#000000' // Màu của kim
+            },
+            limitMax: false,     // Nếu false, giá trị max sẽ tự động tăng nếu giá trị > maxValue
+            limitMin: false,     // Nếu true, giá trị min của gauge sẽ được cố định
+            colorStart: '#6FADCF',   // Màu cho gauge
+            colorStop: '#8FC0DA',    // Màu cho gauge
+            strokeColor: '#E0E0E0',  // Màu viền của gauge
+            generateGradient: true,
+            highDpiSupport: true,     // Hỗ trợ cho màn hình độ phân giải cao
+            staticLabels: {           // Nhãn tĩnh cho gauge
+                font: "bold 20px Helvetica, Arial, sans-serif", // Kiểu chữ
+                labels: [0, 250, 500, 750, 1000], // Các nhãn để hiển thị
+                color: "#000000", // Màu của nhãn
+                fractionDigits: 0 // Số chữ số thập phân
+            },
+            staticZones: [           // Các vùng màu sắc khác nhau
+                {strokeStyle: "#30B32D", min: 0, max: 250}, // Vùng 1 (Xanh lá)
+                {strokeStyle: "#FFDD00", min: 250, max: 750}, // Vùng 2 (Vàng)
+                {strokeStyle: "#F03E3E", min: 750, max: 2000}  // Vùng 3 (Đỏ)
+            ],
+        };
+
+        // Phần tử canvas của bạn
+        var target = document.getElementById('gaugeChart');
+        var gauge = new Gauge(target).setOptions(opts); // Tạo gauge!
+
+        gauge.maxValue = 2000; // Giá trị tối đa cho PPM
+        gauge.setMinValue(0);  // Giá trị tối thiểu cho PPM
+        gauge.animationSpeed = 32; // Tốc độ hoạt hình
+
+        // Hàm để lấy dữ liệu PPM và cập nhật gauge
+        let is_turn_on = false; // Biến bạn có thể thay đổi
+        function updateStatus() {
+            fetch('/get_status')  // Gọi đến endpoint để lấy giá trị PPM mới
+                .then(response => response.json())
+                .then(data => {
+                    is_turn_on = data.is_turn_on;
+                })
+                .catch(error => console.error(error));
+        }
+        // Hàm để cập nhật màu sắc hình tròn
+        function updateStatusCircle() {
+            const statusCircle = document.getElementById('statusCircle');
+            if (is_turn_on) {
+                statusCircle.style.backgroundColor = 'green'; // Màu xanh lá
+            } else {
+                statusCircle.style.backgroundColor = 'red'; // Màu đỏ
+            }
+        }
+        function updatePPM() {
+            fetch('/get_ppm')  // Gọi đến endpoint để lấy giá trị PPM mới
+                .then(response => response.json())
+                .then(data => {
+                    is_turn_on = data.is_turn_on;
+                    gauge.set(data.ppm);  // Cập nhật gauge với giá trị PPM
+                    updateCurrentPPMDisplay(data.ppm); // Cập nhật hiển thị giá trị hiện tại
+                })
+                .catch(error => console.error("Lỗi khi lấy PPM:", error));
+        }
+        function updateStaticZones() {
+            opts.staticZones = [
+                {strokeStyle: "#30B32D", min: 0, max: low_threshold}, // Vùng 1 (Xanh lá)
+                {strokeStyle: "#FFDD00", min: low_threshold, max: high_threshold}, // Vùng 2 (Vàng)
+                {strokeStyle: "#F03E3E", min: high_threshold, max: 2000}  // Vùng 3 (Đỏ)
+            ];
+
+            // Cập nhật nhãn tĩnh
+            opts.staticLabels.labels = [0, low_threshold, high_threshold, 2000];
+
+            // Tái khởi tạo gauge với các tùy chọn mới
+            gauge.setOptions(opts);
+        }
+        // Hàm để hiển thị giá trị hiện tại PPM
+        function updateCurrentPPMDisplay(ppm) {
+            document.getElementById('currentPPM').textContent = ppm + " PPM"; // Cập nhật giá trị PPM
+        }
+        function update_Thresholds() {
+            low_threshold = parseInt(document.getElementById('lowThreshold').value);
+            high_threshold = parseInt(document.getElementById('highThreshold').value);
+            updateStaticZones(); // Cập nhật các vùng màu sắc
+        }
+        // Line chart initialization for History Tab
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        let lineChart;
+
+        function updateLineChart() {
+            fetch('/get_gas_history')
+                .then(response => response.json())
+                .then(data => {
+                    const ppmValues = data.map(entry => entry.ppm);
+                    const timeValues = data.map(entry => entry.time);
+
+                    if (lineChart) {
+                        lineChart.destroy();
+                    }
+
+                    lineChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: timeValues,
+                            datasets: [{
+                                label: 'Gas PPM',
+                                data: ppmValues,
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                x: { title: { display: true, text: 'Time' }},
+                                y: { title: { display: true, text: 'Gas PPM' }, beginAtZero: true }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error("Error fetching gas history:", error));
+        }
+
+        // Lặp lại để cập nhật gauge mỗi giây
+        setInterval(updatePPM, 1000);
+        setInterval(updateStatus, 2000);
+        setInterval(updateThresholds, 1000);
+        setInterval(update_Thresholds, 1000);
+        setInterval(updateStatusCircle, 1000);
+        setInterval(updateLineChart, 10000);
+    </script>
+</body>
+</html>
