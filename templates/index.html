@@ -187,24 +187,21 @@
         gauge.setMinValue(0);  // Giá trị tối thiểu cho PPM
         gauge.animationSpeed = 32; // Tốc độ hoạt hình
 
-        // Hàm để lấy dữ liệu PPM và cập nhật gauge
         let is_turn_on = false; // Biến bạn có thể thay đổi
         function updateStatus() {
             fetch('/get_status')  // Gọi đến endpoint để lấy giá trị PPM mới
                 .then(response => response.json())
                 .then(data => {
                     is_turn_on = data.is_turn_on;
+                    const statusCircle = document.getElementById('statusCircle');
+                    if (is_turn_on) {
+                        statusCircle.style.backgroundColor = 'green'; // Màu xanh lá
+                    }
+                    else {
+                        statusCircle.style.backgroundColor = 'red'; // Màu đỏ
+                    }
                 })
                 .catch(error => console.error(error));
-        }
-        // Hàm để cập nhật màu sắc hình tròn
-        function updateStatusCircle() {
-            const statusCircle = document.getElementById('statusCircle');
-            if (is_turn_on) {
-                statusCircle.style.backgroundColor = 'green'; // Màu xanh lá
-            } else {
-                statusCircle.style.backgroundColor = 'red'; // Màu đỏ
-            }
         }
         function updatePPM() {
             fetch('/get_ppm')  // Gọi đến endpoint để lấy giá trị PPM mới
@@ -276,11 +273,10 @@
         }
 
         // Lặp lại để cập nhật gauge mỗi giây
-        setInterval(updatePPM, 1000);
+        setInterval(updatePPM, 2000);
         setInterval(updateStatus, 2000);
-        setInterval(updateThresholds, 1000);
-        setInterval(update_Thresholds, 1000);
-        setInterval(updateStatusCircle, 10000);
+        setInterval(updateThresholds, 2000);
+        setInterval(update_Thresholds, 2000);
         setInterval(updateLineChart, 10000);
     </script>
 </body>

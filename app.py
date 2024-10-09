@@ -48,7 +48,7 @@ def change_is_turn_on():
         if count == 5:
             is_turn_on = False
         previous_pas_ppm = gas_ppm
-        time.sleep(2)
+        time.sleep(1)
 
 # Khởi chạy luồng cho việc lưu ppm liên tục
 threading.Thread(target=store_ppm_data, daemon=True).start()
@@ -64,9 +64,9 @@ def get_settings():
 def receive_data():
     global gas_ppm
     global is_turn_on
-    is_turn_on = True
     data = request.get_json()  # Lấy dữ liệu JSON từ request
     if data and 'ppm' in data:
+        is_turn_on = True
         gas_ppm = float(data['ppm'])  # Chuyển đổi giá trị ppm từ chuỗi thành số thực
         return jsonify({"status": "success"}), 200
     else:
