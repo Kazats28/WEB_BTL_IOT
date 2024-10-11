@@ -100,7 +100,11 @@ canvas {
     padding: 10px;
     position: relative;
 }
-
+.sidebar p {
+    margin: 0;
+    font-weight: bold;
+    text-align: center;
+}
 .sidebar button {
     width: 80px;
     height: 50px;
@@ -111,7 +115,6 @@ canvas {
     transition: background-color 0.3s ease;
     border-radius: 10px;
 }
-
 .sidebar button.selected {
     background-color: #4CAF50; /* Màu nền của nút được chọn */
     color: white; /* Màu chữ của nút được chọn */
@@ -125,7 +128,6 @@ canvas {
 .tab {
     display: none;
 }
-
 .tab.active {
     display: block;
 }
@@ -141,4 +143,5 @@ canvas {
     border-radius: 50%; /* Tạo hình tròn */
     background-color: red; /* Màu mặc định */
     margin-bottom: 20px; /* Khoảng cách với nút tab */
+    margin-top: 20px;
 }

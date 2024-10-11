@@ -11,9 +11,11 @@
 <body>
     <!-- Sidebar with tabs -->
     <div class="sidebar">
+        <p>Trạng thái hoạt động</p>
         <div class="status-circle" id="statusCircle"></div>
-        <button onclick="showTab('tab1')" class="selected">Thao tác</button>
-        <button onclick="showTab('tab2')">Biểu đồ</button>
+        <button onclick="showTab('tab1')" class="selected">Menu</button>
+        <button onclick="showTab('tab2')">Trực tiếp</button>
+        <button onclick="showTab('tab3')">Xem lại</button>
     </div>
 
     <!-- Main content for tabs -->
@@ -30,13 +32,13 @@
             <!-- Sliders for thresholds -->
             <div class="widget">
                 <h3>Ngưỡng cảnh báo mức thấp</h3>
-                <input type="range" id="lowThreshold" min="0" max="1000" value="{{ low_threshold }}" oninput="updateLowThreshold(this.value)">
+                <input type="range" id="lowThreshold" min="0" max="1000" value="{{ low_threshold }}" onchange="updateLowThreshold(this.value)">
                 <span id="lowThresholdValue">{{ low_threshold }}</span>
             </div>
 
             <div class="widget">
                 <h3>Ngưỡng cảnh báo mức cao</h3>
-                <input type="range" id="highThreshold" min="{{ low_threshold }}" max="2000" value="{{ high_threshold }}" oninput="updateHighThreshold(this.value)">
+                <input type="range" id="highThreshold" min="{{ low_threshold }}" max="10000" value="{{ high_threshold }}" onchange="updateHighThreshold(this.value)">
                 <span id="highThresholdValue">{{ high_threshold }}</span>
             </div>
 
@@ -64,10 +66,16 @@
             <h1>Biểu đồ nồng độ khí Gas</h1>
             <canvas id="lineChart"></canvas>
         </div>
+
+        <div id="tab3" class="tab">
+            <h1>Biểu đồ nồng độ khí Gas trong vòng một giờ</h1>
+            <canvas id="lineChartHistory"></canvas>
+        </div>
     </div>
 
     <script>
-        // Function to switch between tabs
+        let currentTab = 'tab1'; // Theo dõi tab hiện tại
+
         function showTab(tabId) {
             // Ẩn tất cả các tab
             var tabs = document.querySelectorAll('.tab');
@@ -85,10 +93,132 @@
             });
 
             // Thêm lớp 'selected' cho nút được chọn
-            var selectedButton = Array.from(buttons).find(button => button.textContent === (tabId === 'tab1' ? 'Hành động' : 'Biểu đồ'));
+            var selectedButton = Array.from(buttons).find(button => button.textContent === (tabId === 'tab1' ? 'Menu' : (tabId === 'tab2' ? 'Trực tiếp' : 'Xem lại')));
             if (selectedButton) {
                 selectedButton.classList.add('selected'); // Thêm lớp cho nút được chọn
             }
+
+            currentTab = tabId; // Cập nhật tab hiện tại
+            if (currentTab === 'tab2') {
+                if (lineChart) {
+                    lineChart.destroy();
+                }
+
+                lineChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [], // Khởi tạo với nhãn trống
+                        datasets: [{
+                            label: 'Gas PPM',
+                            data: [], // Khởi tạo với dữ liệu PPM trống
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: { title: { display: true, text: 'Time' }},
+                            y: { title: { display: true, text: 'Gas PPM' }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+            if (currentTab === 'tab3') {
+                updateLineChartHistory();
+            }
+        }
+
+        // Khởi tạo biểu đồ gauge bằng Gauge.js
+        var opts = {
+            angle: 0, // Phạm vi của cung gauge (cung nhỏ để bao phủ một nửa)
+            lineWidth: 0.4, // Độ dày của gauge
+            radiusScale: 1, // Bán kính tương đối
+            pointer: {
+                length: 0.6, // Tương đối với bán kính gauge
+                strokeWidth: 0.035, // Độ dày của kim
+                color: '#000000' // Màu của kim
+            },
+            limitMax: false,     // Nếu false, giá trị max sẽ tự động tăng nếu giá trị > maxValue
+            limitMin: false,     // Nếu true, giá trị min của gauge sẽ được cố định
+            colorStart: '#6FADCF',   // Màu cho gauge
+            colorStop: '#8FC0DA',    // Màu cho gauge
+            strokeColor: '#E0E0E0',  // Màu viền của gauge
+            generateGradient: true,
+            highDpiSupport: true,     // Hỗ trợ cho màn hình độ phân giải cao
+            staticLabels: {           // Nhãn tĩnh cho gauge
+                font: "bold 20px Helvetica, Arial, sans-serif", // Kiểu chữ
+                labels: [0, 250, 500, 750, 1000], // Các nhãn để hiển thị
+                color: "#000000", // Màu của nhãn
+                fractionDigits: 0 // Số chữ số thập phân
+            },
+            staticZones: [           // Các vùng màu sắc khác nhau
+                {strokeStyle: "#30B32D", min: 0, max: 250}, // Vùng 1 (Xanh lá)
+                {strokeStyle: "#FFDD00", min: 250, max: 750}, // Vùng 2 (Vàng)
+                {strokeStyle: "#F03E3E", min: 750, max: 10000}  // Vùng 3 (Đỏ)
+            ],
+        };
+
+        // Phần tử canvas của bạn
+        var target = document.getElementById('gaugeChart');
+        var gauge = new Gauge(target).setOptions(opts); // Tạo gauge!
+
+        gauge.maxValue = 10000; // Giá trị tối đa cho PPM
+        gauge.setMinValue(0);  // Giá trị tối thiểu cho PPM
+        gauge.animationSpeed = 32; // Tốc độ hoạt hình
+
+        function updateStaticZones() {
+            opts.staticZones = [
+                {strokeStyle: "#30B32D", min: 0, max: low_threshold}, // Vùng 1 (Xanh lá)
+                {strokeStyle: "#FFDD00", min: low_threshold, max: high_threshold}, // Vùng 2 (Vàng)
+                {strokeStyle: "#F03E3E", min: high_threshold, max: 10000}  // Vùng 3 (Đỏ)
+            ];
+
+            // Cập nhật nhãn tĩnh
+            opts.staticLabels.labels = [0, low_threshold, high_threshold, 10000];
+
+            // Tái khởi tạo gauge với các tùy chọn mới
+            gauge.setOptions(opts);
+        }
+
+        function update_Thresholds() {
+            low_threshold = parseInt(document.getElementById('lowThreshold').value);
+            high_threshold = parseInt(document.getElementById('highThreshold').value);
+            updateStaticZones(); // Cập nhật các vùng màu sắc
+        }
+
+        let is_turn_on = false;
+        function updateStatus() {
+            fetch('/get_status')  // Gọi đến endpoint để lấy giá trị PPM mới
+                .then(response => response.json())
+                .then(data => {
+                    is_turn_on = data.is_turn_on;
+                    const statusCircle = document.getElementById('statusCircle');
+                    if (is_turn_on) {
+                        statusCircle.style.backgroundColor = 'green'; // Màu xanh lá
+                    }
+                    else {
+                        statusCircle.style.backgroundColor = 'red'; // Màu đỏ
+                    }
+                })
+                .catch(error => console.error(error));
+        }
+        updateStatus();
+
+        function updatePPM() {
+            if (is_turn_on) {
+                fetch('/get_ppm')  // Gọi đến endpoint để lấy giá trị PPM mới
+                    .then(response => response.json())
+                    .then(data => {
+                        gauge.set(data.ppm);  // Cập nhật gauge với giá trị PPM
+                        updateCurrentPPMDisplay(data.ppm); // Cập nhật hiển thị giá trị hiện tại
+                    })
+                    .catch(error => console.error("Lỗi khi lấy PPM:", error));
+            }
+        }
+
+        // Hàm để hiển thị giá trị hiện tại PPM
+        function updateCurrentPPMDisplay(ppm) {
+            document.getElementById('currentPPM').textContent = ppm + " PPM"; // Cập nhật giá trị PPM
         }
 
         function updateLowThreshold(value) {
@@ -148,136 +278,110 @@
                 }
             });
         }
-
-        // Khởi tạo biểu đồ gauge bằng Gauge.js
-        var opts = {
-            angle: 0, // Phạm vi của cung gauge (cung nhỏ để bao phủ một nửa)
-            lineWidth: 0.4, // Độ dày của gauge
-            radiusScale: 1, // Bán kính tương đối
-            pointer: {
-                length: 0.6, // Tương đối với bán kính gauge
-                strokeWidth: 0.035, // Độ dày của kim
-                color: '#000000' // Màu của kim
-            },
-            limitMax: false,     // Nếu false, giá trị max sẽ tự động tăng nếu giá trị > maxValue
-            limitMin: false,     // Nếu true, giá trị min của gauge sẽ được cố định
-            colorStart: '#6FADCF',   // Màu cho gauge
-            colorStop: '#8FC0DA',    // Màu cho gauge
-            strokeColor: '#E0E0E0',  // Màu viền của gauge
-            generateGradient: true,
-            highDpiSupport: true,     // Hỗ trợ cho màn hình độ phân giải cao
-            staticLabels: {           // Nhãn tĩnh cho gauge
-                font: "bold 20px Helvetica, Arial, sans-serif", // Kiểu chữ
-                labels: [0, 250, 500, 750, 1000], // Các nhãn để hiển thị
-                color: "#000000", // Màu của nhãn
-                fractionDigits: 0 // Số chữ số thập phân
-            },
-            staticZones: [           // Các vùng màu sắc khác nhau
-                {strokeStyle: "#30B32D", min: 0, max: 250}, // Vùng 1 (Xanh lá)
-                {strokeStyle: "#FFDD00", min: 250, max: 750}, // Vùng 2 (Vàng)
-                {strokeStyle: "#F03E3E", min: 750, max: 2000}  // Vùng 3 (Đỏ)
-            ],
-        };
-
-        // Phần tử canvas của bạn
-        var target = document.getElementById('gaugeChart');
-        var gauge = new Gauge(target).setOptions(opts); // Tạo gauge!
-
-        gauge.maxValue = 2000; // Giá trị tối đa cho PPM
-        gauge.setMinValue(0);  // Giá trị tối thiểu cho PPM
-        gauge.animationSpeed = 32; // Tốc độ hoạt hình
-
-        let is_turn_on = false; // Biến bạn có thể thay đổi
-        function updateStatus() {
-            fetch('/get_status')  // Gọi đến endpoint để lấy giá trị PPM mới
-                .then(response => response.json())
-                .then(data => {
-                    is_turn_on = data.is_turn_on;
-                    const statusCircle = document.getElementById('statusCircle');
-                    if (is_turn_on) {
-                        statusCircle.style.backgroundColor = 'green'; // Màu xanh lá
-                    }
-                    else {
-                        statusCircle.style.backgroundColor = 'red'; // Màu đỏ
-                    }
-                })
-                .catch(error => console.error(error));
-        }
-        function updatePPM() {
-            fetch('/get_ppm')  // Gọi đến endpoint để lấy giá trị PPM mới
-                .then(response => response.json())
-                .then(data => {
-                    is_turn_on = data.is_turn_on;
-                    gauge.set(data.ppm);  // Cập nhật gauge với giá trị PPM
-                    updateCurrentPPMDisplay(data.ppm); // Cập nhật hiển thị giá trị hiện tại
-                })
-                .catch(error => console.error("Lỗi khi lấy PPM:", error));
-        }
-        function updateStaticZones() {
-            opts.staticZones = [
-                {strokeStyle: "#30B32D", min: 0, max: low_threshold}, // Vùng 1 (Xanh lá)
-                {strokeStyle: "#FFDD00", min: low_threshold, max: high_threshold}, // Vùng 2 (Vàng)
-                {strokeStyle: "#F03E3E", min: high_threshold, max: 2000}  // Vùng 3 (Đỏ)
-            ];
-
-            // Cập nhật nhãn tĩnh
-            opts.staticLabels.labels = [0, low_threshold, high_threshold, 2000];
-
-            // Tái khởi tạo gauge với các tùy chọn mới
-            gauge.setOptions(opts);
-        }
-        // Hàm để hiển thị giá trị hiện tại PPM
-        function updateCurrentPPMDisplay(ppm) {
-            document.getElementById('currentPPM').textContent = ppm + " PPM"; // Cập nhật giá trị PPM
-        }
-        function update_Thresholds() {
-            low_threshold = parseInt(document.getElementById('lowThreshold').value);
-            high_threshold = parseInt(document.getElementById('highThreshold').value);
-            updateStaticZones(); // Cập nhật các vùng màu sắc
-        }
-        // Line chart initialization for History Tab
+        
         const ctx = document.getElementById('lineChart').getContext('2d');
-        let lineChart;
-
-        function updateLineChart() {
-            fetch('/get_gas_history')
-                .then(response => response.json())
-                .then(data => {
-                    const ppmValues = data.map(entry => entry.ppm);
-                    const timeValues = data.map(entry => entry.time);
-
-                    if (lineChart) {
-                        lineChart.destroy();
+        let lineChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Ban đầu chưa có giá trị thời gian
+                datasets: [{
+                    label: 'Gas PPM',
+                    data: [],
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Time' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Gas PPM' },
+                        beginAtZero: true
                     }
+                }
+            }
+        });
+        // Hàm để cập nhật Line Chart
+        function updateLineChart() {
+            if (currentTab === 'tab2' && is_turn_on) {  // Kiểm tra nếu tab "Biểu đồ" đang mở
+                fetch('/get_gas_data')
+                    .then(response => response.json())
+                    .then(data => {
+                        const ppmValue = data[0].ppm;  // Lấy giá trị ppm
+                        const timeValue = data[0].time;  // Lấy giá trị thời gian
 
-                    lineChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: timeValues,
-                            datasets: [{
-                                label: 'Gas PPM',
-                                data: ppmValues,
-                                borderColor: 'rgba(75, 192, 192, 1)',
-                                fill: false
-                            }]
-                        },
-                        options: {
-                            scales: {
-                                x: { title: { display: true, text: 'Time' }},
-                                y: { title: { display: true, text: 'Gas PPM' }, beginAtZero: true }
-                            }
+                        // Thêm giá trị mới vào biểu đồ
+                        lineChart.data.labels.push(timeValue); // Thêm nhãn thời gian mới nhất
+                        lineChart.data.datasets[0].data.push(ppmValue); // Thêm dữ liệu PPM mới nhất
+
+                        // Giới hạn số điểm hiển thị
+                        if (lineChart.data.labels.length > 50) {
+                            lineChart.data.labels.shift();  // Xóa nhãn đầu tiên
+                            lineChart.data.datasets[0].data.shift();  // Xóa dữ liệu đầu tiên
                         }
-                    });
-                })
-                .catch(error => console.error("Error fetching gas history:", error));
+
+                        lineChart.update('none');  // Cập nhật biểu đồ
+                    })
+                    .catch(error => console.error("Error fetching gas:", error));
+            }
         }
 
-        // Lặp lại để cập nhật gauge mỗi giây
-        setInterval(updatePPM, 2000);
-        setInterval(updateStatus, 2000);
-        setInterval(updateThresholds, 2000);
+        const ct = document.getElementById('lineChartHistory').getContext('2d');
+        let lineChartHistory;
+
+        function updateLineChartHistory() {
+            if (currentTab === 'tab3') {
+                fetch('/get_gas_history')
+                    .then(response => response.json())
+                    .then(data => {
+                        const ppmValues = data.map(entry => entry.ppm); // Get ppm values
+                        const timeValues = data.map(entry => entry.time); // Get time values
+
+                        if (lineChartHistory) {
+                            lineChartHistory.destroy(); // Destroy old chart before updating
+                        }
+
+                        lineChartHistory = new Chart(ct, {
+                            type: 'line',
+                            data: {
+                                labels: timeValues,
+                                datasets: [{
+                                    label: 'Gas PPM',
+                                    data: ppmValues,
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    fill: false,
+                                }]
+                            },
+                            options: {
+                                scales: {
+                                    x: {
+                                        title: {
+                                            display: true,
+                                            text: 'Time'
+                                        }
+                                    },
+                                    y: {
+                                        title: {
+                                            display: true,
+                                            text: 'Gas PPM'
+                                        },
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    })
+                    .catch(error => console.error("Error fetching gas history:", error));
+            }
+        }
+
+        setInterval(updatePPM, 1000);
+        setInterval(updateStatus, 5000);
         setInterval(update_Thresholds, 2000);
-        setInterval(updateLineChart, 10000);
+        setInterval(updateLineChart, 1000);
+        setInterval(updateLineChartHistory, 60000);
     </script>
 </body>
 </html>
