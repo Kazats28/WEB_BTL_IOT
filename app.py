@@ -3,6 +3,8 @@ from pymongo import MongoClient
 import threading
 import time
 from datetime import datetime
+import pytz
+
 
 app = Flask(__name__)
 
@@ -20,26 +22,16 @@ ppm_collection = db.gas_data
 
 last_ping = time.time()
 gas_ppm = 0
-current_gas_ppm = 0
 is_turn_on = False
-current_time = datetime.now()
 
-def getting_ppm_data():
-    global gas_ppm
-    global is_turn_on
-    global current_gas_ppm
-    global current_time
-    while True:
-        if is_turn_on:
-            current_gas_ppm = gas_ppm
-            current_time = datetime.now()
-        time.sleep(1)
+laos_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
 # Gửi dữ liệu gas_ppm lên MongoDB mỗi 10 giây
 def store_ppm_data():
     global gas_ppm
     global is_turn_on
     while True:
-        if is_turn_on:
+        if gas_ppm != 0 and is_turn_on:
             ppm_collection.insert_one({
                 "ppm": gas_ppm,
                 "timestamp": datetime.now()
@@ -49,15 +41,16 @@ def store_ppm_data():
 def change_is_turn_on():
     global is_turn_on
     global last_ping
+    global gas_ppm
     while True:
         if time.time() - last_ping > 5:
             is_turn_on = False
+            gas_ppm = 0
         else:
             is_turn_on = True
         time.sleep(1)
 
 # Khởi chạy luồng cho việc lưu ppm liên tục
-threading.Thread(target=getting_ppm_data, daemon=True).start()
 threading.Thread(target=change_is_turn_on, daemon=True).start()
 threading.Thread(target=store_ppm_data, daemon=True).start()
 
@@ -71,13 +64,15 @@ def get_settings():
 def receive_data():
     global gas_ppm
     global last_ping
-    data = request.get_json()  # Lấy dữ liệu JSON từ request
-    if data and 'ppm' in data:
-        last_ping = time.time()
-        gas_ppm = float(data['ppm'])  # Chuyển đổi giá trị ppm từ chuỗi thành số thực
-        return jsonify({"status": "success"}), 200
-    else:
-        return jsonify({"status": "error", "message": "Invalid data"}), 400
+    data = request.data.decode('utf-8')  # Lấy dữ liệu dạng plain text
+    if data:
+        try:
+            gas_ppm = gas_ppm + int(data)  # Chuyển đổi giá trị thành số nguyên
+            last_ping = time.time()  # Cập nhật thời gian ping
+            return "success", 200  # Trả về trạng thái thành công
+        except ValueError:
+            return "Invalid data format", 400  # Trả về lỗi nếu dữ liệu không hợp lệ
+    return "No data received", 400  # Trả về lỗi nếu không có dữ liệu
 
 # Route để cập nhật dữ liệu lên ESP32
 @app.route('/update', methods=['GET'])
@@ -102,11 +97,12 @@ def index():
 
 @app.route('/get_gas_data')
 def get_gas_data():
+    global laos_tz
     # Prepare the data in JSON format for the frontend
     data = [
         {
-            'ppm': current_gas_ppm,
-            'time': current_time.strftime('%H:%M:%S')  # Format timestamp as HH:MM:SS
+            'ppm': gas_ppm,
+            'time': datetime.now(laos_tz).strftime('%H:%M:%S')  # Format timestamp as HH:MM:SS
         }
     ]
     return jsonify(data)
@@ -132,7 +128,7 @@ def get_gas_history():
 
 @app.route('/get_ppm')
 def get_ppm():
-    return jsonify({'ppm': gas_ppm})
+    return str(gas_ppm)  # Return gas_ppm as a plain text string
 
 @app.route('/get_status')
 def get_status():

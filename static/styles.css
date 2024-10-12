@@ -145,3 +145,20 @@ canvas {
     margin-bottom: 20px; /* Khoảng cách với nút tab */
     margin-top: 20px;
 }
+
+.slider-container {
+    position: relative;
+    width: 100%;
+}
+
+input[type="range"] {
+    width: 100%;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    position: absolute;
+    top: -20px; /* Để định vị các nhãn phía trên thanh slider */
+    width: 100%;
+}
